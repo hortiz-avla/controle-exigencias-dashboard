@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import io
 import re
 import unicodedata
@@ -14,6 +15,7 @@ from streamlit_autorefresh import st_autorefresh
 
 APP_DIR = Path(__file__).resolve().parent
 SAMPLE_PATH = APP_DIR / "data" / "exemplo.csv"
+LOGO_PATH = APP_DIR / "avla-moodys.jpg"
 
 COLUNAS = {
     "segurado": "Segurado",
@@ -37,9 +39,9 @@ COLUNAS = {
 
 st.set_page_config(
     page_title="Controle de Exigências",
-    page_icon="🛡️",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -47,44 +49,60 @@ def aplicar_estilo() -> None:
     st.markdown(
         """
         <style>
-        :root {
-          --ink: #14231f;
-          --muted: #65736e;
-          --green: #0b5745;
-          --green-2: #11735a;
-          --paper: #f4f7f5;
-          --line: #dce5e1;
-        }
+        :root { --ink:#16324f; --muted:#7c91a6; --blue:#1768bd; --blue2:#0d7fe8; --paper:#f3f6fb; --line:#d8e0ea; }
         .stApp { background: var(--paper); color: var(--ink); }
-        [data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid var(--line); }
-        [data-testid="stHeader"] { background: rgba(244,247,245,.9); }
-        .block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1500px; }
-        .hero {
-          background: linear-gradient(118deg, #083e33 0%, #0b5745 58%, #128068 100%);
-          border-radius: 22px; padding: 28px 32px; color: white; margin-bottom: 18px;
-          box-shadow: 0 16px 42px rgba(8,62,51,.16);
+        [data-testid="stSidebar"] { background:#fff; border-right:1px solid var(--line); }
+        [data-testid="stHeader"] { background:rgba(243,246,251,.92); }
+        .block-container { padding-top:1.2rem; padding-bottom:3rem; max-width:1900px; }
+        .topbar {
+          display:flex; align-items:center; justify-content:space-between; gap:24px;
+          background:linear-gradient(105deg,#1768bd 0%,#0f72ca 100%); color:#fff;
+          margin:0 0 24px; padding:18px 26px; border-radius:3px;
+          box-shadow:0 8px 24px rgba(23,104,189,.13);
         }
-        .hero-kicker { font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
-        .hero h1 { margin: 6px 0 7px; font-size: clamp(1.8rem, 4vw, 2.7rem); line-height: 1.05; }
-        .hero p { margin: 0; opacity: .84; max-width: 760px; }
+        .brand { display:flex; align-items:center; gap:20px; min-width:0; }
+        .brand img { width:105px; height:47px; object-fit:contain; background:#fff; border-radius:7px; padding:4px 8px; }
+        .brand-line { width:1px; height:38px; background:rgba(255,255,255,.35); }
+        .brand-title { font-size:1.02rem; font-weight:700; white-space:nowrap; }
+        .top-meta { text-align:right; font-size:.88rem; opacity:.93; white-space:nowrap; }
+        .filter-title { font-size:.76rem; letter-spacing:.09em; text-transform:uppercase; color:#344d65; margin:0 0 3px; }
         div[data-testid="stMetric"] {
-          background: white; border: 1px solid var(--line); padding: 15px 17px;
-          border-radius: 16px; box-shadow: 0 5px 18px rgba(18,45,37,.045);
+          background:#fff; border:1px solid var(--line); padding:15px 19px; min-height:126px;
+          border-radius:10px; box-shadow:none;
         }
-        div[data-testid="stMetricLabel"] { color: var(--muted); }
-        div[data-testid="stMetricValue"] { color: var(--ink); }
-        div[data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-        h2, h3 { color: var(--ink); letter-spacing: -.02em; }
+        div[data-testid="stMetricLabel"] { color:#263f58; text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+        div[data-testid="stMetricValue"] { color:var(--blue); font-weight:700; font-size:1.75rem; }
+        div[data-testid="stDataFrame"] { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+        div[data-baseweb="select"] > div, .stTextInput input { background:#fff; border-color:transparent !important; min-height:47px; }
+        div[data-testid="stDateInput"] input { background:#fff; }
+        div[data-testid="stTabs"] button { color:#243b53; padding-left:.75rem; padding-right:.75rem; }
+        div[data-testid="stTabs"] button[aria-selected="true"] { color:var(--blue); }
+        h2, h3 { color:var(--ink); letter-spacing:.01em; text-transform:uppercase; font-size:.92rem !important; }
         .section-note { color: var(--muted); font-size: .9rem; margin-top: -12px; margin-bottom: 12px; }
         .signal {
-          background: white; border: 1px solid var(--line); border-left: 5px solid #d89b25;
-          border-radius: 13px; padding: 13px 16px; margin: 6px 0 18px;
+          background:#fff; border:1px solid var(--line); border-radius:9px;
+          padding:12px 16px; margin:8px 0; color:#344d65;
         }
-        .stDownloadButton button { border-radius: 10px; border-color: var(--green); color: var(--green); }
+        .signal.warning { border-left:4px solid #f0a120; }
+        .signal.danger { border-left:4px solid #d43c36; }
+        .chart-card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px 20px; }
+        .stDownloadButton button, .stButton button { border-radius:7px; border-color:var(--blue); color:var(--blue); }
+        @media (max-width: 760px) {
+          .topbar { align-items:flex-start; padding:16px; }
+          .brand-line, .top-meta { display:none; }
+          .brand-title { white-space:normal; font-size:.9rem; }
+          .brand img { width:82px; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+
+def logo_data_uri() -> str:
+    if not LOGO_PATH.exists():
+        return ""
+    return "data:image/jpeg;base64," + base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
 
 
 def canonico(valor: Any) -> str:
@@ -196,24 +214,41 @@ def preparar_dados(bruto: pd.DataFrame) -> pd.DataFrame:
 
 
 def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
-    st.sidebar.markdown("## Filtros")
-    status_opcoes = sorted(df["status"].dropna().astype(str).unique())
-    status = st.sidebar.multiselect("Status", status_opcoes, default=status_opcoes)
-
     segurados = sorted(df["segurado"].dropna().astype(str).unique())
-    segurado = st.sidebar.multiselect("Segurado", segurados)
-
     inspetores = sorted(v for v in df["inspetor"].dropna().astype(str).unique() if v.strip())
-    inspetor = st.sidebar.multiselect("Inspetor", inspetores)
+    status_opcoes = sorted(df["status"].dropna().astype(str).unique())
+    meses_validos = df["data_inspecao"].dropna().dt.to_period("M").sort_values().unique()
+    meses = [periodo.strftime("%m/%Y") for periodo in meses_validos]
 
-    busca = st.sidebar.text_input("Buscar", placeholder="Título, endereço ou descrição")
-    intervalo = st.sidebar.date_input("Prazo final", value=(), format="DD/MM/YYYY")
+    c1, c2, c3, c4 = st.columns([1.05, 1.35, 1.15, 1.05], gap="medium")
+    with c1:
+        st.markdown('<div class="filter-title">Competência</div>', unsafe_allow_html=True)
+        competencia = st.selectbox("Competência", ["Todas"] + meses, label_visibility="collapsed")
+    with c2:
+        st.markdown('<div class="filter-title">Segurado</div>', unsafe_allow_html=True)
+        segurado = st.selectbox("Segurado", ["Todos"] + segurados, label_visibility="collapsed")
+    with c3:
+        st.markdown('<div class="filter-title">Inspetor</div>', unsafe_allow_html=True)
+        inspetor = st.selectbox("Inspetor", ["Todos"] + inspetores, label_visibility="collapsed")
+    with c4:
+        st.markdown('<div class="filter-title">Situação</div>', unsafe_allow_html=True)
+        status = st.selectbox("Situação", ["Todas"] + status_opcoes, label_visibility="collapsed")
 
-    filtrado = df[df["status"].isin(status)].copy()
-    if segurado:
-        filtrado = filtrado[filtrado["segurado"].isin(segurado)]
-    if inspetor:
-        filtrado = filtrado[filtrado["inspetor"].isin(inspetor)]
+    busca = st.text_input(
+        "Buscar nos registros",
+        placeholder="Buscar por título, endereço ou descrição...",
+        label_visibility="collapsed",
+    )
+
+    filtrado = df.copy()
+    if competencia != "Todas":
+        filtrado = filtrado[filtrado["data_inspecao"].dt.strftime("%m/%Y") == competencia]
+    if segurado != "Todos":
+        filtrado = filtrado[filtrado["segurado"] == segurado]
+    if inspetor != "Todos":
+        filtrado = filtrado[filtrado["inspetor"] == inspetor]
+    if status != "Todas":
+        filtrado = filtrado[filtrado["status"] == status]
     if busca:
         alvo = busca.casefold()
         mascara = (
@@ -225,11 +260,7 @@ def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
             .str.contains(re.escape(alvo), regex=True)
         )
         filtrado = filtrado[mascara]
-    if isinstance(intervalo, (tuple, list)) and len(intervalo) == 2:
-        inicio, fim = pd.Timestamp(intervalo[0]), pd.Timestamp(intervalo[1])
-        filtrado = filtrado[filtrado["prazo_final"].between(inicio, fim)]
-
-    st.sidebar.caption(f"{len(filtrado):,} de {len(df):,} exigências exibidas".replace(",", "."))
+    st.caption(f"{len(filtrado):,} de {len(df):,} exigências exibidas".replace(",", "."))
     return filtrado
 
 
@@ -245,28 +276,41 @@ def renderizar_metricas(df: pd.DataFrame) -> None:
     media = df.loc[df["dias_atraso"] > 0, "dias_atraso"].mean()
     atraso_medio = round(media) if pd.notna(media) else 0
 
-    colunas = st.columns(5)
+    hoje = pd.Timestamp(date.today())
+    vence_15 = int(
+        ((df["status"] == "Em andamento") & df["prazo_final"].between(hoje, hoje + pd.Timedelta(days=15))).sum()
+    )
+    taxa = percentual(finalizado, total)
+
+    colunas = st.columns(6)
     colunas[0].metric("Total", total)
-    colunas[1].metric("Em andamento", andamento, f"{percentual(andamento, total):.0f}%")
-    colunas[2].metric("Atrasadas", atrasado, f"{percentual(atrasado, total):.0f}%", delta_color="inverse")
-    colunas[3].metric("Finalizadas", finalizado, f"{percentual(finalizado, total):.0f}%")
-    colunas[4].metric("Atraso médio", f"{atraso_medio} dias")
+    colunas[1].metric("Em andamento", andamento, f"{percentual(andamento, total):.0f}% do total")
+    colunas[2].metric("Atrasadas", atrasado, f"{percentual(atrasado, total):.0f}% do total", delta_color="inverse")
+    colunas[3].metric("Finalizadas", finalizado, f"{taxa:.0f}% do total")
+    colunas[4].metric("Vencem em 15 dias", vence_15)
+    colunas[5].metric("Atraso médio", f"{atraso_medio} dias")
 
 
 def renderizar_graficos(df: pd.DataFrame) -> None:
+    total = len(df)
+    finalizadas = int((df["status"] == "Finalizado").sum())
+    taxa = finalizadas / total if total else 0
+    st.subheader("Progresso de atendimento")
+    st.progress(taxa, text=f"{taxa:.1%} das exigências concluídas ({finalizadas} de {total})")
+
     esquerda, direita = st.columns([1, 1], gap="large")
     with esquerda:
-        st.subheader("Situação das exigências")
+        st.subheader("Distribuição por situação")
         contagem = df["status"].value_counts().rename_axis("Status").to_frame("Exigências")
-        st.bar_chart(contagem, color="#0b5745", horizontal=True, height=285)
+        st.bar_chart(contagem, color="#1768bd", horizontal=True, height=285)
     with direita:
-        st.subheader("Segurados com mais pendências")
+        st.subheader("Maiores pendências por segurado")
         pendentes = df[df["status"] != "Finalizado"]
         ranking = (
             pendentes.groupby("segurado").size().sort_values(ascending=False).head(8)
             .rename_axis("Segurado").to_frame("Pendências")
         )
-        st.bar_chart(ranking, color="#d89b25", horizontal=True, height=285)
+        st.bar_chart(ranking, color="#e28a14", horizontal=True, height=285)
 
 
 def renderizar_alertas(df: pd.DataFrame) -> None:
@@ -277,13 +321,19 @@ def renderizar_alertas(df: pd.DataFrame) -> None:
         & df["prazo_final"].notna()
         & df["prazo_final"].between(hoje, limite)
     ].sort_values("prazo_final")
-    if proximos.empty:
-        return
-    st.markdown(
-        f'<div class="signal"><strong>{len(proximos)} exigência(s)</strong> vencem nos próximos 15 dias. '
-        "Use o filtro de prazo para analisar esse grupo.</div>",
-        unsafe_allow_html=True,
-    )
+    atrasadas = int((df["status"] == "Atrasado").sum())
+    if not proximos.empty:
+        st.markdown(
+            f'<div class="signal warning">› &nbsp;⚠️ <strong>{len(proximos)} exigência(s)</strong> '
+            "vencem nos próximos 15 dias — acompanhe as providências.</div>",
+            unsafe_allow_html=True,
+        )
+    if atrasadas:
+        st.markdown(
+            f'<div class="signal danger">› &nbsp;🔴 <strong>{atrasadas} exigência(s) atrasada(s)</strong> '
+            "— priorize a regularização e o envio das evidências.</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def renderizar_tabela(df: pd.DataFrame) -> None:
@@ -331,17 +381,22 @@ def renderizar_dashboard() -> None:
         st.exception(exc)
         st.stop()
 
+    logo = logo_data_uri()
+    imagem = f'<img src="{logo}" alt="Avla">' if logo else '<strong style="font-size:2rem">Avla</strong>'
     st.markdown(
-        """
-        <div class="hero">
-          <div class="hero-kicker">Inspeção de riscos</div>
-          <h1>Controle de Exigências</h1>
-          <p>Acompanhamento de prazos, pendências e conclusões das cartas de recomendação.</p>
+        f"""
+        <div class="topbar">
+          <div class="brand">
+            {imagem}
+            <div class="brand-line"></div>
+            <div class="brand-title">Painel de Exigências e Recomendações</div>
+          </div>
+          <div class="top-meta">Inspeção de Riscos &nbsp;|&nbsp; Atualizado em {datetime.now():%d/%m/%Y}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.sidebar.markdown("# 🛡️ Controle")
+    st.sidebar.markdown("# Controle")
     st.sidebar.caption(f"Fonte: {fonte}")
     st.sidebar.caption("Atualização automática: a cada 30 segundos")
     if st.sidebar.button("🔄 Atualizar agora", width="stretch"):
@@ -351,10 +406,20 @@ def renderizar_dashboard() -> None:
         st.sidebar.info("O painel está em demonstração. Configure os segredos para conectar sua planilha.")
 
     filtrado = aplicar_filtros(dados)
-    renderizar_metricas(filtrado)
-    renderizar_alertas(filtrado)
-    renderizar_graficos(filtrado)
-    renderizar_tabela(filtrado)
+    geral, andamento, finalizados, atrasados = st.tabs(
+        ["Visão geral", "Em andamento", "Finalizados", "Atrasados"]
+    )
+    with geral:
+        renderizar_metricas(filtrado)
+        renderizar_alertas(filtrado)
+        renderizar_graficos(filtrado)
+        renderizar_tabela(filtrado)
+    with andamento:
+        renderizar_tabela(filtrado[filtrado["status"] == "Em andamento"])
+    with finalizados:
+        renderizar_tabela(filtrado[filtrado["status"] == "Finalizado"])
+    with atrasados:
+        renderizar_tabela(filtrado[filtrado["status"] == "Atrasado"])
     st.caption(
         f"Dados consultados em {datetime.now():%d/%m/%Y às %H:%M:%S} "
         "• atualização automática a cada 30 segundos"

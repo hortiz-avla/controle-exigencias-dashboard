@@ -336,7 +336,7 @@ def renderizar_alertas(df: pd.DataFrame) -> None:
         )
 
 
-def renderizar_tabela(df: pd.DataFrame) -> None:
+def renderizar_tabela(df: pd.DataFrame, chave: str) -> None:
     st.subheader("Controle detalhado")
     st.markdown('<div class="section-note">Selecione uma linha para consultar a descrição completa na tabela.</div>', unsafe_allow_html=True)
     tabela = df[
@@ -352,6 +352,7 @@ def renderizar_tabela(df: pd.DataFrame) -> None:
     tabela = tabela.sort_values(["Dias em atraso", "Prazo final"], ascending=[False, True])
     st.dataframe(
         tabela,
+        key=f"tabela_{chave}",
         width="stretch",
         hide_index=True,
         height=475,
@@ -368,6 +369,7 @@ def renderizar_tabela(df: pd.DataFrame) -> None:
         data=csv,
         file_name=f"exigencias_filtradas_{date.today():%Y-%m-%d}.csv",
         mime="text/csv",
+        key=f"download_{chave}",
     )
 
 
@@ -413,13 +415,13 @@ def renderizar_dashboard() -> None:
         renderizar_metricas(filtrado)
         renderizar_alertas(filtrado)
         renderizar_graficos(filtrado)
-        renderizar_tabela(filtrado)
+        renderizar_tabela(filtrado, "visao_geral")
     with andamento:
-        renderizar_tabela(filtrado[filtrado["status"] == "Em andamento"])
+        renderizar_tabela(filtrado[filtrado["status"] == "Em andamento"], "em_andamento")
     with finalizados:
-        renderizar_tabela(filtrado[filtrado["status"] == "Finalizado"])
+        renderizar_tabela(filtrado[filtrado["status"] == "Finalizado"], "finalizados")
     with atrasados:
-        renderizar_tabela(filtrado[filtrado["status"] == "Atrasado"])
+        renderizar_tabela(filtrado[filtrado["status"] == "Atrasado"], "atrasados")
     st.caption(
         f"Dados consultados em {datetime.now():%d/%m/%Y às %H:%M:%S} "
         "• atualização automática a cada 30 segundos"

@@ -38,8 +38,8 @@ COLUNAS = {
 
 
 st.set_page_config(
-    page_title="Controle de Exigências",
-    page_icon="📊",
+    page_title="Painel de Exigências | Avla",
+    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "📊",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -61,9 +61,9 @@ def aplicar_estilo() -> None:
           box-shadow:0 8px 24px rgba(23,104,189,.13);
         }
         .brand { display:flex; align-items:center; gap:20px; min-width:0; }
-        .brand img { width:105px; height:47px; object-fit:contain; background:#fff; border-radius:7px; padding:4px 8px; }
+        .brand img { width:138px; height:58px; object-fit:contain; background:#fff; border-radius:8px; padding:5px 10px; }
         .brand-line { width:1px; height:38px; background:rgba(255,255,255,.35); }
-        .brand-title { font-size:1.02rem; font-weight:700; white-space:nowrap; }
+        .brand-title { font-size:1.45rem; font-weight:750; letter-spacing:-.015em; white-space:nowrap; }
         .top-meta { text-align:right; font-size:.88rem; opacity:.93; white-space:nowrap; }
         .filter-title { font-size:.76rem; letter-spacing:.09em; text-transform:uppercase; color:#344d65; margin:0 0 3px; }
         div[data-testid="stMetric"] {
@@ -90,8 +90,8 @@ def aplicar_estilo() -> None:
         @media (max-width: 760px) {
           .topbar { align-items:flex-start; padding:16px; }
           .brand-line, .top-meta { display:none; }
-          .brand-title { white-space:normal; font-size:.9rem; }
-          .brand img { width:82px; }
+          .brand-title { white-space:normal; font-size:1.05rem; }
+          .brand img { width:100px; height:48px; }
         }
         </style>
         """,

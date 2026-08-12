@@ -103,12 +103,12 @@ def segredo(caminho: str, padrao: Any = None) -> Any:
         return padrao
 
 
-@st.cache_data(ttl=55, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner=False)
 def carregar_csv_publico(url: str) -> pd.DataFrame:
     return pd.read_csv(url)
 
 
-@st.cache_data(ttl=55, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner=False)
 def carregar_google_sheets(
     spreadsheet_id: str, worksheet_name: str, credenciais: dict[str, Any]
 ) -> pd.DataFrame:
@@ -125,7 +125,7 @@ def carregar_google_sheets(
     return pd.DataFrame(worksheet.get_all_records(default_blank=""))
 
 
-@st.cache_data(ttl=55, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner=False)
 def carregar_exemplo() -> pd.DataFrame:
     return pd.read_csv(SAMPLE_PATH)
 
@@ -343,6 +343,10 @@ def renderizar_dashboard() -> None:
     )
     st.sidebar.markdown("# 🛡️ Controle")
     st.sidebar.caption(f"Fonte: {fonte}")
+    st.sidebar.caption("Atualização automática: a cada 30 segundos")
+    if st.sidebar.button("🔄 Atualizar agora", width="stretch"):
+        st.cache_data.clear()
+        st.rerun()
     if fonte == "Dados de demonstração":
         st.sidebar.info("O painel está em demonstração. Configure os segredos para conectar sua planilha.")
 
@@ -351,9 +355,12 @@ def renderizar_dashboard() -> None:
     renderizar_alertas(filtrado)
     renderizar_graficos(filtrado)
     renderizar_tabela(filtrado)
-    st.caption(f"Atualizado em {datetime.now():%d/%m/%Y às %H:%M} • recarregamento dos dados a cada 55 segundos")
+    st.caption(
+        f"Dados consultados em {datetime.now():%d/%m/%Y às %H:%M:%S} "
+        "• atualização automática a cada 30 segundos"
+    )
 
 
 if __name__ == "__main__":
-    st_autorefresh(interval=60_000, key="atualizacao_automatica")
+    st_autorefresh(interval=30_000, key="atualizacao_automatica")
     renderizar_dashboard()

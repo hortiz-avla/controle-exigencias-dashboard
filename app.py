@@ -384,7 +384,7 @@ def renderizar_graficos(df: pd.DataFrame) -> None:
     st.bar_chart(
         mensal_grafico,
         color=cores_status,
-        stack=True,
+        stack=False,
         height=330,
         x_label="Mês da inspeção",
         y_label="Quantidade de exigências",

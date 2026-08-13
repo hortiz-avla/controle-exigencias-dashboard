@@ -200,6 +200,13 @@ def preparar_dados(bruto: pd.DataFrame) -> pd.DataFrame:
     df["finalizado"] = (
         df["finalizado"].astype(str).str.strip().str.lower().isin({"true", "verdadeiro", "sim", "1"})
     )
+    df["tipo_exigencia"] = (
+        df["titulo"]
+        .fillna("")
+        .astype(str)
+        .str.replace(r"^\s*\d{1,3}\s*[.\-–—)]\s*", "", regex=True)
+        .str.strip()
+    )
 
     hoje = pd.Timestamp(date.today())
     status_calculado = pd.Series("Em andamento", index=df.index)
@@ -227,12 +234,16 @@ def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
     segurados = sorted(df["segurado"].dropna().astype(str).unique())
     inspetores = sorted(v for v in df["inspetor"].dropna().astype(str).unique() if v.strip())
     status_opcoes = sorted(df["status"].dropna().astype(str).unique())
+    tipos_exigencia = sorted(
+        (v for v in df["tipo_exigencia"].dropna().astype(str).unique() if v.strip()),
+        key=str.casefold,
+    )
     meses_validos = (
         df["data_inspecao"].dropna().dt.to_period("M").sort_values(ascending=False).unique()
     )
     competencias = {rotulo_competencia(periodo): periodo for periodo in meses_validos}
 
-    c1, c2, c3, c4 = st.columns([1.05, 1.35, 1.15, 1.05], gap="medium")
+    c1, c2, c3, c4, c5 = st.columns([1.05, 1.35, 1.45, 1.15, 1.05], gap="medium")
     with c1:
         st.markdown('<div class="filter-title">Mês da inspeção</div>', unsafe_allow_html=True)
         competencia = st.selectbox(
@@ -244,9 +255,16 @@ def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
         st.markdown('<div class="filter-title">Segurado</div>', unsafe_allow_html=True)
         segurado = st.selectbox("Segurado", ["Todos"] + segurados, label_visibility="collapsed")
     with c3:
+        st.markdown('<div class="filter-title">Tipo de exigência</div>', unsafe_allow_html=True)
+        tipo_exigencia = st.selectbox(
+            "Tipo de exigência",
+            ["Todos"] + tipos_exigencia,
+            label_visibility="collapsed",
+        )
+    with c4:
         st.markdown('<div class="filter-title">Inspetor</div>', unsafe_allow_html=True)
         inspetor = st.selectbox("Inspetor", ["Todos"] + inspetores, label_visibility="collapsed")
-    with c4:
+    with c5:
         st.markdown('<div class="filter-title">Situação</div>', unsafe_allow_html=True)
         status = st.selectbox("Situação", ["Todas"] + status_opcoes, label_visibility="collapsed")
 
@@ -264,6 +282,8 @@ def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
         ]
     if segurado != "Todos":
         filtrado = filtrado[filtrado["segurado"] == segurado]
+    if tipo_exigencia != "Todos":
+        filtrado = filtrado[filtrado["tipo_exigencia"] == tipo_exigencia]
     if inspetor != "Todos":
         filtrado = filtrado[filtrado["inspetor"] == inspetor]
     if status != "Todas":

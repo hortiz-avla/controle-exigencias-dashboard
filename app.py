@@ -36,6 +36,11 @@ COLUNAS = {
     "arquivo": "Arquivo de Origem",
 }
 
+MESES_PT_BR = (
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+)
+
 
 st.set_page_config(
     page_title="Painel de Exigências | Avla",
@@ -213,17 +218,28 @@ def preparar_dados(bruto: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def rotulo_competencia(periodo: pd.Period) -> str:
+    """Exibe uma competência mensal no formato Julho/2026."""
+    return f"{MESES_PT_BR[periodo.month - 1]}/{periodo.year}"
+
+
 def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
     segurados = sorted(df["segurado"].dropna().astype(str).unique())
     inspetores = sorted(v for v in df["inspetor"].dropna().astype(str).unique() if v.strip())
     status_opcoes = sorted(df["status"].dropna().astype(str).unique())
-    meses_validos = df["data_inspecao"].dropna().dt.to_period("M").sort_values().unique()
-    meses = [periodo.strftime("%m/%Y") for periodo in meses_validos]
+    meses_validos = (
+        df["data_inspecao"].dropna().dt.to_period("M").sort_values(ascending=False).unique()
+    )
+    competencias = {rotulo_competencia(periodo): periodo for periodo in meses_validos}
 
     c1, c2, c3, c4 = st.columns([1.05, 1.35, 1.15, 1.05], gap="medium")
     with c1:
-        st.markdown('<div class="filter-title">Competência</div>', unsafe_allow_html=True)
-        competencia = st.selectbox("Competência", ["Todas"] + meses, label_visibility="collapsed")
+        st.markdown('<div class="filter-title">Mês da inspeção</div>', unsafe_allow_html=True)
+        competencia = st.selectbox(
+            "Mês da inspeção",
+            ["Todas"] + list(competencias),
+            label_visibility="collapsed",
+        )
     with c2:
         st.markdown('<div class="filter-title">Segurado</div>', unsafe_allow_html=True)
         segurado = st.selectbox("Segurado", ["Todos"] + segurados, label_visibility="collapsed")
@@ -242,7 +258,10 @@ def aplicar_filtros(df: pd.DataFrame) -> pd.DataFrame:
 
     filtrado = df.copy()
     if competencia != "Todas":
-        filtrado = filtrado[filtrado["data_inspecao"].dt.strftime("%m/%Y") == competencia]
+        periodo_selecionado = competencias[competencia]
+        filtrado = filtrado[
+            filtrado["data_inspecao"].dt.to_period("M") == periodo_selecionado
+        ]
     if segurado != "Todos":
         filtrado = filtrado[filtrado["segurado"] == segurado]
     if inspetor != "Todos":

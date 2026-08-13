@@ -385,6 +385,7 @@ def renderizar_graficos(df: pd.DataFrame) -> None:
         mensal_grafico,
         color=cores_status,
         stack=False,
+        sort=False,
         height=330,
         x_label="Mês da inspeção",
         y_label="Quantidade de exigências",

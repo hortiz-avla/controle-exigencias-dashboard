@@ -8,6 +8,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -350,6 +351,61 @@ def renderizar_graficos(df: pd.DataFrame) -> None:
             .rename_axis("Segurado").to_frame("Pendências")
         )
         st.bar_chart(ranking, color="#e28a14", horizontal=True, height=285)
+
+    st.subheader("Status por mês da inspeção")
+    mensal_base = df[df["data_inspecao"].notna()].copy()
+    if mensal_base.empty:
+        st.info("Não há datas de inspeção válidas para montar o gráfico mensal.")
+        return
+
+    nomes_meses = [
+        "jan", "fev", "mar", "abr", "mai", "jun",
+        "jul", "ago", "set", "out", "nov", "dez",
+    ]
+    mensal_base["mes_ordem"] = mensal_base["data_inspecao"].dt.to_period("M").dt.to_timestamp()
+    mensal_base["mes"] = mensal_base["mes_ordem"].apply(
+        lambda valor: f"{nomes_meses[valor.month - 1]}/{valor.year}"
+    )
+    mensal = (
+        mensal_base.groupby(["mes_ordem", "mes", "status"], as_index=False)
+        .size()
+        .rename(columns={"size": "exigencias", "status": "Status"})
+        .sort_values("mes_ordem")
+    )
+    ordem_meses = mensal.drop_duplicates("mes_ordem")["mes"].tolist()
+    ordem_status = ["Em andamento", "Finalizado", "Atrasado"]
+    cores_status = ["#1768bd", "#159447", "#d43c36"]
+    grafico_mensal = (
+        alt.Chart(mensal)
+        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+        .encode(
+            x=alt.X(
+                "mes:N",
+                title=None,
+                sort=ordem_meses,
+                axis=alt.Axis(labelAngle=0, labelColor="#526b82"),
+            ),
+            y=alt.Y(
+                "exigencias:Q",
+                title="Quantidade de exigências",
+                axis=alt.Axis(tickMinStep=1, gridColor="#e6ebf2"),
+            ),
+            color=alt.Color(
+                "Status:N",
+                sort=ordem_status,
+                scale=alt.Scale(domain=ordem_status, range=cores_status),
+                legend=alt.Legend(title=None, orient="top"),
+            ),
+            order=alt.Order("Status:N", sort="ascending"),
+            tooltip=[
+                alt.Tooltip("mes:N", title="Mês"),
+                alt.Tooltip("Status:N"),
+                alt.Tooltip("exigencias:Q", title="Quantidade", format=".0f"),
+            ],
+        )
+        .properties(height=330)
+    )
+    st.altair_chart(grafico_mensal, width="stretch")
 
 
 def renderizar_alertas(df: pd.DataFrame) -> None:

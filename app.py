@@ -8,7 +8,6 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-import altair as alt
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -375,37 +374,21 @@ def renderizar_graficos(df: pd.DataFrame) -> None:
     ordem_meses = mensal.drop_duplicates("mes_ordem")["mes"].tolist()
     ordem_status = ["Em andamento", "Finalizado", "Atrasado"]
     cores_status = ["#1768bd", "#159447", "#d43c36"]
-    grafico_mensal = (
-        alt.Chart(mensal)
-        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
-        .encode(
-            x=alt.X(
-                "mes:N",
-                title=None,
-                sort=ordem_meses,
-                axis=alt.Axis(labelAngle=0, labelColor="#526b82"),
-            ),
-            y=alt.Y(
-                "exigencias:Q",
-                title="Quantidade de exigências",
-                axis=alt.Axis(tickMinStep=1, gridColor="#e6ebf2"),
-            ),
-            color=alt.Color(
-                "Status:N",
-                sort=ordem_status,
-                scale=alt.Scale(domain=ordem_status, range=cores_status),
-                legend=alt.Legend(title=None, orient="top"),
-            ),
-            order=alt.Order("Status:N", sort="ascending"),
-            tooltip=[
-                alt.Tooltip("mes:N", title="Mês"),
-                alt.Tooltip("Status:N"),
-                alt.Tooltip("exigencias:Q", title="Quantidade", format=".0f"),
-            ],
-        )
-        .properties(height=330)
+    mensal_grafico = (
+        mensal.pivot(index="mes", columns="Status", values="exigencias")
+        .fillna(0)
+        .reindex(ordem_meses)
+        .reindex(columns=ordem_status, fill_value=0)
+        .astype(int)
     )
-    st.altair_chart(grafico_mensal, width="stretch")
+    st.bar_chart(
+        mensal_grafico,
+        color=cores_status,
+        stack=True,
+        height=330,
+        x_label="Mês da inspeção",
+        y_label="Quantidade de exigências",
+    )
 
 
 def renderizar_alertas(df: pd.DataFrame) -> None:

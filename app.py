@@ -409,39 +409,44 @@ def renderizar_graficos(df: pd.DataFrame, somente_pendentes: bool = True) -> Non
 
 
 def renderizar_evolucao_finalizados(df: pd.DataFrame) -> None:
-    st.subheader("Evolução diária dos finalizados")
+    st.subheader("Evolução mensal dos finalizados")
     concluidos = df[
         (df["status"] == "Finalizado") & df["data_conclusao"].notna()
     ].copy()
     if concluidos.empty:
-        st.info("Preencha a Data de Conclusão dos registros finalizados para visualizar a evolução diária.")
+        st.info("Preencha a Data de Conclusão dos registros finalizados para visualizar a evolução mensal.")
         return
 
-    datas_conclusao = concluidos["data_conclusao"].dt.normalize()
-    hoje = pd.Timestamp(date.today())
-    concluidos_hoje = int((datas_conclusao == hoje).sum())
-    concluidos_30_dias = int(datas_conclusao.between(hoje - pd.Timedelta(days=29), hoje).sum())
-    taxa_atual = percentual(len(concluidos), len(df))
+    periodos = concluidos["data_conclusao"].dt.to_period("M")
+    finalizados_por_mes = periodos.value_counts().sort_index()
+    mes_atual = pd.Period(date.today(), freq="M")
+    concluidos_mes_atual = int(finalizados_por_mes.get(mes_atual, 0))
+    media_mensal = float(finalizados_por_mes.mean()) if not finalizados_por_mes.empty else 0.0
 
     indicadores = st.columns(3)
-    indicadores[0].metric("Finalizados hoje", concluidos_hoje)
-    indicadores[1].metric("Finalizados nos últimos 30 dias", concluidos_30_dias)
-    indicadores[2].metric("Taxa atual de conclusão", f"{taxa_atual:.1f}%")
+    indicadores[0].metric("Finalizados no mês atual", concluidos_mes_atual)
+    indicadores[1].metric("Média mensal", f"{media_mensal:.1f}")
+    indicadores[2].metric("Total finalizado com data", len(concluidos))
 
-    inicio = datas_conclusao.min() - pd.Timedelta(days=1)
-    fim = max(datas_conclusao.max(), hoje)
-    dias = pd.date_range(inicio, fim, freq="D")
-    finalizados_por_dia = datas_conclusao.value_counts().reindex(dias, fill_value=0).sort_index()
-    evolucao = (finalizados_por_dia.cumsum() / len(df) * 100).to_frame(
-        "Taxa de conclusão (%)"
+    rotulos = [
+        f"{MESES_PT_BR[periodo.month - 1][:3].lower()}/{periodo.year}"
+        for periodo in finalizados_por_mes.index
+    ]
+    evolucao = pd.DataFrame(
+        {
+            "Finalizados no mês": finalizados_por_mes.astype(int).to_numpy(),
+            "Finalizados acumulados": finalizados_por_mes.cumsum().astype(int).to_numpy(),
+        },
+        index=rotulos,
     )
-    evolucao.index.name = "Data"
+    evolucao.index.name = "Mês"
     st.line_chart(
         evolucao,
-        color="#159447",
+        color=["#1768bd", "#159447"],
+        sort=False,
         height=330,
-        x_label="Data de conclusão",
-        y_label="% de exigências finalizadas",
+        x_label="Mês de conclusão",
+        y_label="Número de exigências finalizadas",
     )
 
 

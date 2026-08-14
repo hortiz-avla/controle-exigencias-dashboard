@@ -428,22 +428,17 @@ def renderizar_evolucao_finalizados(df: pd.DataFrame) -> None:
     indicadores[1].metric("Média mensal", f"{media_mensal:.1f}")
     indicadores[2].metric("Total finalizado com data", len(concluidos))
 
-    rotulos = [
-        f"{MESES_PT_BR[periodo.month - 1][:3].lower()}/{periodo.year}"
-        for periodo in finalizados_por_mes.index
-    ]
     evolucao = pd.DataFrame(
         {
             "Finalizados no mês": finalizados_por_mes.astype(int).to_numpy(),
             "Finalizados acumulados": finalizados_por_mes.cumsum().astype(int).to_numpy(),
         },
-        index=rotulos,
+        index=finalizados_por_mes.index.to_timestamp(),
     )
     evolucao.index.name = "Mês"
     st.line_chart(
         evolucao,
         color=["#1768bd", "#159447"],
-        sort=False,
         height=330,
         x_label="Mês de conclusão",
         y_label="Número de exigências finalizadas",

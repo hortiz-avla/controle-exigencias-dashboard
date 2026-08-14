@@ -418,10 +418,14 @@ def renderizar_evolucao_finalizados(df: pd.DataFrame) -> None:
         return
 
     periodos = concluidos["data_conclusao"].dt.to_period("M")
-    finalizados_por_mes = periodos.value_counts().sort_index()
+    contagem_observada = periodos.value_counts().sort_index()
     mes_atual = pd.Period(date.today(), freq="M")
+    primeiro_mes = contagem_observada.index.min() - 1
+    ultimo_mes = max(contagem_observada.index.max(), mes_atual)
+    intervalo_mensal = pd.period_range(primeiro_mes, ultimo_mes, freq="M")
+    finalizados_por_mes = contagem_observada.reindex(intervalo_mensal, fill_value=0)
     concluidos_mes_atual = int(finalizados_por_mes.get(mes_atual, 0))
-    media_mensal = float(finalizados_por_mes.mean()) if not finalizados_por_mes.empty else 0.0
+    media_mensal = float(contagem_observada.mean()) if not contagem_observada.empty else 0.0
 
     indicadores = st.columns(3)
     indicadores[0].metric("Finalizados no mês atual", concluidos_mes_atual)

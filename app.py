@@ -33,6 +33,8 @@ COLUNAS = {
     "data_conclusao": "Data de Conclusão",
     "dias_atraso": "Dias em Atraso",
     "status": "Status",
+    "email_meia_data": "Email Meia Data",
+    "email_prazo_final": "Email Prazo Final",
     "arquivo": "Arquivo de Origem",
 }
 
@@ -321,13 +323,23 @@ def renderizar_metricas(df: pd.DataFrame) -> None:
     )
     taxa = percentual(finalizado, total)
 
-    colunas = st.columns(6)
+    def contar_emails_enviados(coluna: str) -> int:
+        valores = df[coluna].fillna("").astype(str).str.strip().str.lower()
+        nao_enviado = {"", "false", "falso", "não", "nao", "0", "none", "nan"}
+        return int((~valores.isin(nao_enviado)).sum())
+
+    emails_meia_data = contar_emails_enviados("email_meia_data")
+    emails_prazo_final = contar_emails_enviados("email_prazo_final")
+
+    colunas = st.columns(8)
     colunas[0].metric("Total", total)
     colunas[1].metric("Em andamento", andamento, f"{percentual(andamento, total):.0f}% do total")
     colunas[2].metric("Atrasadas", atrasado, f"{percentual(atrasado, total):.0f}% do total", delta_color="inverse")
     colunas[3].metric("Finalizadas", finalizado, f"{taxa:.0f}% do total")
     colunas[4].metric("Vencem em 15 dias", vence_15)
     colunas[5].metric("Atraso médio", f"{atraso_medio} dias")
+    colunas[6].metric("E-mails meia data", emails_meia_data)
+    colunas[7].metric("E-mails prazo final", emails_prazo_final)
 
 
 def renderizar_graficos(df: pd.DataFrame) -> None:

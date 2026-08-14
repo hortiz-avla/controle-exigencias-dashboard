@@ -421,32 +421,132 @@ def renderizar_evolucao_finalizados(df: pd.DataFrame) -> None:
     contagem_observada = periodos.value_counts().sort_index()
     mes_atual = pd.Period(date.today(), freq="M")
     primeiro_mes = contagem_observada.index.min() - 1
-    ultimo_mes = max(contagem_observada.index.max(), mes_atual)
+    prazos_validos = df["prazo_final"].dropna()
+    mes_meta = (
+        max(prazos_validos.max().to_period("M"), mes_atual)
+        if not prazos_validos.empty
+        else mes_atual
+    )
+    ultimo_mes = max(contagem_observada.index.max(), mes_meta)
     intervalo_mensal = pd.period_range(primeiro_mes, ultimo_mes, freq="M")
     finalizados_por_mes = contagem_observada.reindex(intervalo_mensal, fill_value=0)
     concluidos_mes_atual = int(finalizados_por_mes.get(mes_atual, 0))
-    media_mensal = float(contagem_observada.mean()) if not contagem_observada.empty else 0.0
+    mes_anterior = mes_atual - 1
+    concluidos_mes_anterior = int(finalizados_por_mes.get(mes_anterior, 0))
+    crescimento = concluidos_mes_atual - concluidos_mes_anterior
+    pendentes = max(0, len(df) - len(concluidos))
+    meses_restantes = max(1, mes_meta.ordinal - mes_atual.ordinal + 1)
+    ritmo_necessario = pendentes / meses_restantes
 
-    indicadores = st.columns(3)
-    indicadores[0].metric("Finalizados no mês atual", concluidos_mes_atual)
-    indicadores[1].metric("Média mensal", f"{media_mensal:.1f}")
-    indicadores[2].metric("Total finalizado com data", len(concluidos))
+    indicadores = st.columns(2)
+    indicadores[0].metric(
+        "Crescimento mensal",
+        concluidos_mes_atual,
+        f"{crescimento:+d} vs mês anterior",
+    )
+    indicadores[1].metric(
+        "Ritmo necessário / mês",
+        f"{ritmo_necessario:.1f}",
+        f"{pendentes} pendentes • {meses_restantes} mês(es)",
+        delta_color="off",
+    )
 
-    evolucao = pd.DataFrame(
-        {
-            "Finalizados no mês": finalizados_por_mes.astype(int).to_numpy(),
-            "Finalizados acumulados": finalizados_por_mes.cumsum().astype(int).to_numpy(),
+    rotulos = [
+        f"{MESES_PT_BR[periodo.month - 1][:3].lower()}/{periodo.year}"
+        for periodo in intervalo_mensal
+    ]
+    dados_linhas: list[dict[str, Any]] = []
+    acumulado = 0
+    divisor_ideal = max(1, len(intervalo_mensal) - 1)
+    for indice, periodo in enumerate(intervalo_mensal):
+        rotulo = rotulos[indice]
+        if periodo <= mes_atual:
+            acumulado += int(finalizados_por_mes.get(periodo, 0))
+            dados_linhas.append(
+                {"Mês": rotulo, "Valor": acumulado, "Série": "Finalizados acumulados"}
+            )
+        dados_linhas.append(
+            {
+                "Mês": rotulo,
+                "Valor": round(len(df) * indice / divisor_ideal, 2),
+                "Série": "Ritmo ideal",
+            }
+        )
+
+    grafico = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "height": 330,
+        "layer": [
+            {
+                "data": {"values": dados_linhas},
+                "transform": [{"filter": "datum['Série'] === 'Finalizados acumulados'"}],
+                "mark": {"type": "area", "color": "#159447", "opacity": 0.08},
+                "encoding": {
+                    "x": {"field": "Mês", "type": "nominal", "sort": rotulos},
+                    "y": {"field": "Valor", "type": "quantitative"},
+                },
+            },
+            {
+                "data": {"values": dados_linhas},
+                "mark": {"type": "line", "strokeWidth": 3},
+                "encoding": {
+                    "x": {
+                        "field": "Mês",
+                        "type": "nominal",
+                        "sort": rotulos,
+                        "axis": {"title": "Mês de conclusão", "labelAngle": -25},
+                    },
+                    "y": {
+                        "field": "Valor",
+                        "type": "quantitative",
+                        "axis": {"title": "Número de exigências finalizadas", "tickMinStep": 1},
+                        "scale": {"zero": True},
+                    },
+                    "color": {
+                        "field": "Série",
+                        "type": "nominal",
+                        "scale": {
+                            "domain": ["Finalizados acumulados", "Ritmo ideal"],
+                            "range": ["#159447", "#e27600"],
+                        },
+                        "legend": {"title": None, "orient": "bottom"},
+                    },
+                    "strokeDash": {
+                        "field": "Série",
+                        "type": "nominal",
+                        "scale": {
+                            "domain": ["Finalizados acumulados", "Ritmo ideal"],
+                            "range": [[1, 0], [7, 5]],
+                        },
+                        "legend": None,
+                    },
+                    "tooltip": [
+                        {"field": "Mês", "type": "nominal", "title": "Mês"},
+                        {"field": "Série", "type": "nominal"},
+                        {"field": "Valor", "type": "quantitative", "format": ".1f"},
+                    ],
+                },
+            },
+            {
+                "data": {"values": [{"Meta": len(df)}]},
+                "mark": {"type": "rule", "color": "#1768bd", "strokeDash": [9, 7], "strokeWidth": 2},
+                "encoding": {"y": {"field": "Meta", "type": "quantitative"}},
+            },
+            {
+                "data": {"values": [{"Mês": f"{MESES_PT_BR[mes_atual.month - 1][:3].lower()}/{mes_atual.year}"}]},
+                "mark": {"type": "rule", "color": "#91a3b4", "strokeDash": [3, 4]},
+                "encoding": {
+                    "x": {"field": "Mês", "type": "nominal", "sort": rotulos}
+                },
+            },
+        ],
+        "config": {
+            "background": "#ffffff",
+            "view": {"stroke": None},
+            "axis": {"gridColor": "#e7edf4", "labelColor": "#526b82", "titleColor": "#16324f"},
         },
-        index=finalizados_por_mes.index.to_timestamp(),
-    )
-    evolucao.index.name = "Mês"
-    st.line_chart(
-        evolucao,
-        color=["#1768bd", "#159447"],
-        height=330,
-        x_label="Mês de conclusão",
-        y_label="Número de exigências finalizadas",
-    )
+    }
+    st.vega_lite_chart(spec=grafico, width="stretch", theme=None, key="evolucao_mensal_finalizados")
 
 
 def renderizar_alertas(df: pd.DataFrame) -> None:

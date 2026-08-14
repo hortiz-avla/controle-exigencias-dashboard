@@ -311,6 +311,7 @@ def percentual(parte: int, total: int) -> float:
 
 def renderizar_metricas(df: pd.DataFrame) -> None:
     total = len(df)
+    segurados_unicos = df["segurado"].astype(str).map(canonico).replace("", pd.NA).nunique()
     andamento = int((df["status"] == "Em andamento").sum())
     atrasado = int((df["status"] == "Atrasado").sum())
     finalizado = int((df["status"] == "Finalizado").sum())
@@ -331,18 +332,21 @@ def renderizar_metricas(df: pd.DataFrame) -> None:
     emails_meia_data = contar_emails_enviados("email_meia_data")
     emails_prazo_final = contar_emails_enviados("email_prazo_final")
 
-    colunas = st.columns(8)
-    colunas[0].metric("Total", total)
-    colunas[1].metric("Em andamento", andamento, f"{percentual(andamento, total):.0f}% do total")
-    colunas[2].metric("Atrasadas", atrasado, f"{percentual(atrasado, total):.0f}% do total", delta_color="inverse")
-    colunas[3].metric("Finalizadas", finalizado, f"{taxa:.0f}% do total")
-    colunas[4].metric("Vencem em 15 dias", vence_15)
-    colunas[5].metric("Atraso médio", f"{atraso_medio} dias")
-    colunas[6].metric("E-mails meia data", emails_meia_data)
-    colunas[7].metric("E-mails prazo final", emails_prazo_final)
+    linha_principal = st.columns(5)
+    linha_principal[0].metric("Total de exigências", total)
+    linha_principal[1].metric("Segurados únicos", segurados_unicos)
+    linha_principal[2].metric("Em andamento", andamento, f"{percentual(andamento, total):.0f}% do total")
+    linha_principal[3].metric("Atrasadas", atrasado, f"{percentual(atrasado, total):.0f}% do total", delta_color="inverse")
+    linha_principal[4].metric("Finalizadas", finalizado, f"{taxa:.0f}% do total")
+
+    linha_operacional = st.columns(4)
+    linha_operacional[0].metric("Vencem em 15 dias", vence_15)
+    linha_operacional[1].metric("Atraso médio", f"{atraso_medio} dias")
+    linha_operacional[2].metric("E-mails meia data", emails_meia_data)
+    linha_operacional[3].metric("E-mails prazo final", emails_prazo_final)
 
 
-def renderizar_graficos(df: pd.DataFrame) -> None:
+def renderizar_graficos(df: pd.DataFrame, somente_pendentes: bool = True) -> None:
     total = len(df)
     finalizadas = int((df["status"] == "Finalizado").sum())
     taxa = finalizadas / total if total else 0
@@ -355,8 +359,8 @@ def renderizar_graficos(df: pd.DataFrame) -> None:
         contagem = df["status"].value_counts().rename_axis("Status").to_frame("Exigências")
         st.bar_chart(contagem, color="#1768bd", horizontal=True, height=285)
     with direita:
-        st.subheader("Maiores pendências por segurado")
-        pendentes = df[df["status"] != "Finalizado"]
+        st.subheader("Maiores pendências por segurado" if somente_pendentes else "Registros por segurado")
+        pendentes = df[df["status"] != "Finalizado"] if somente_pendentes else df
         ranking = (
             pendentes.groupby("segurado").size().sort_values(ascending=False).head(8)
             .rename_axis("Segurado").to_frame("Pendências")
@@ -401,6 +405,43 @@ def renderizar_graficos(df: pd.DataFrame) -> None:
         height=330,
         x_label="Mês da inspeção",
         y_label="Quantidade de exigências",
+    )
+
+
+def renderizar_evolucao_finalizados(df: pd.DataFrame) -> None:
+    st.subheader("Evolução diária dos finalizados")
+    concluidos = df[
+        (df["status"] == "Finalizado") & df["data_conclusao"].notna()
+    ].copy()
+    if concluidos.empty:
+        st.info("Preencha a Data de Conclusão dos registros finalizados para visualizar a evolução diária.")
+        return
+
+    datas_conclusao = concluidos["data_conclusao"].dt.normalize()
+    hoje = pd.Timestamp(date.today())
+    concluidos_hoje = int((datas_conclusao == hoje).sum())
+    concluidos_30_dias = int(datas_conclusao.between(hoje - pd.Timedelta(days=29), hoje).sum())
+    taxa_atual = percentual(len(concluidos), len(df))
+
+    indicadores = st.columns(3)
+    indicadores[0].metric("Finalizados hoje", concluidos_hoje)
+    indicadores[1].metric("Finalizados nos últimos 30 dias", concluidos_30_dias)
+    indicadores[2].metric("Taxa atual de conclusão", f"{taxa_atual:.1f}%")
+
+    inicio = datas_conclusao.min() - pd.Timedelta(days=1)
+    fim = max(datas_conclusao.max(), hoje)
+    dias = pd.date_range(inicio, fim, freq="D")
+    finalizados_por_dia = datas_conclusao.value_counts().reindex(dias, fill_value=0).sort_index()
+    evolucao = (finalizados_por_dia.cumsum() / len(df) * 100).to_frame(
+        "Taxa de conclusão (%)"
+    )
+    evolucao.index.name = "Data"
+    st.line_chart(
+        evolucao,
+        color="#159447",
+        height=330,
+        x_label="Data de conclusão",
+        y_label="% de exigências finalizadas",
     )
 
 
@@ -464,6 +505,23 @@ def renderizar_tabela(df: pd.DataFrame, chave: str) -> None:
     )
 
 
+def renderizar_conteudo_aba(
+    df: pd.DataFrame,
+    chave: str,
+    somente_pendentes: bool = False,
+    mostrar_evolucao: bool = False,
+) -> None:
+    if df.empty:
+        st.info("Não há registros para esta situação com os filtros selecionados.")
+        return
+    renderizar_metricas(df)
+    renderizar_alertas(df)
+    renderizar_graficos(df, somente_pendentes=somente_pendentes)
+    if mostrar_evolucao:
+        renderizar_evolucao_finalizados(df)
+    renderizar_tabela(df, chave)
+
+
 def renderizar_dashboard() -> None:
     aplicar_estilo()
     try:
@@ -503,16 +561,27 @@ def renderizar_dashboard() -> None:
         ["Visão geral", "Em andamento", "Finalizados", "Atrasados"]
     )
     with geral:
-        renderizar_metricas(filtrado)
-        renderizar_alertas(filtrado)
-        renderizar_graficos(filtrado)
-        renderizar_tabela(filtrado, "visao_geral")
+        renderizar_conteudo_aba(
+            filtrado,
+            "visao_geral",
+            somente_pendentes=True,
+            mostrar_evolucao=True,
+        )
     with andamento:
-        renderizar_tabela(filtrado[filtrado["status"] == "Em andamento"], "em_andamento")
+        renderizar_conteudo_aba(
+            filtrado[filtrado["status"] == "Em andamento"],
+            "em_andamento",
+        )
     with finalizados:
-        renderizar_tabela(filtrado[filtrado["status"] == "Finalizado"], "finalizados")
+        renderizar_conteudo_aba(
+            filtrado[filtrado["status"] == "Finalizado"],
+            "finalizados",
+        )
     with atrasados:
-        renderizar_tabela(filtrado[filtrado["status"] == "Atrasado"], "atrasados")
+        renderizar_conteudo_aba(
+            filtrado[filtrado["status"] == "Atrasado"],
+            "atrasados",
+        )
     st.caption(
         f"Dados consultados em {datetime.now():%d/%m/%Y às %H:%M:%S} "
         "• atualização automática a cada 30 segundos"

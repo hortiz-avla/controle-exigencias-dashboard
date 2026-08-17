@@ -134,6 +134,18 @@ def carregar_csv_publico(url: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=20, show_spinner=False)
+def carregar_apps_script(url: str, token: str) -> pd.DataFrame:
+    import requests
+
+    resposta = requests.post(url, json={"token": token}, timeout=30)
+    resposta.raise_for_status()
+    conteudo = resposta.json()
+    if not conteudo.get("ok"):
+        raise PermissionError(conteudo.get("error", "A ponte do Apps Script recusou o acesso."))
+    return pd.DataFrame(conteudo.get("rows", []), columns=conteudo.get("columns", []))
+
+
+@st.cache_data(ttl=20, show_spinner=False)
 def carregar_google_sheets(
     spreadsheet_id: str, worksheet_name: str, credenciais: dict[str, Any]
 ) -> pd.DataFrame:
@@ -156,11 +168,18 @@ def carregar_exemplo() -> pd.DataFrame:
 
 
 def carregar_dados() -> tuple[pd.DataFrame, str]:
+    apps_script_url = segredo("apps_script.url", "")
+    apps_script_token = segredo("apps_script.token", "")
     spreadsheet_id = segredo("gsheets.spreadsheet_id", "")
     worksheet_name = segredo("gsheets.worksheet", "Base")
     csv_url = segredo("gsheets.public_csv_url", "")
     credenciais = segredo("gcp_service_account", None)
 
+    if apps_script_url and apps_script_token:
+        return (
+            carregar_apps_script(apps_script_url, apps_script_token),
+            "Google Sheets (ponte segura)",
+        )
     if spreadsheet_id and credenciais:
         return (
             carregar_google_sheets(spreadsheet_id, worksheet_name, dict(credenciais)),
